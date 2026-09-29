@@ -1,0 +1,89 @@
+name: Daily Gold Diwali Forecast
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Run daily at midnight UTC
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+        
+      - name: Run Model and Generate Forecast
+        run: python main.py
+        
+      - name: Build Dashboard Page
+        run: |
+          mkdir -p public
+          # Create a simple HTML wrapper
+          cat << 'HTML_EOF' > public/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Diwali Gold Forecast</title>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 2rem; line-height: 1.6; color: #333; }
+                  img { max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 2rem; }
+                  pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+                  h1, h2 { border-bottom: 1px solid #eee; padding-bottom: 0.3em; margin-top: 2rem; }
+                  .container { display: flex; flex-direction: column; gap: 20px; }
+              </style>
+          </head>
+          <body>
+          HTML_EOF
+          
+          # Convert Markdown to HTML
+          python -c '
+          import markdown
+          with open("outputs/reports/diwali_2026_gold_forecast.md", "r") as f:
+              text = f.read()
+          html = markdown.markdown(text)
+          with open("public/index.html", "a") as f:
+              f.write(html)
+          '
+          
+          # Add charts
+          cat << 'HTML_EOF' >> public/index.html
+          <h2>Forecast Charts</h2>
+          <div class="container">
+              <img src="charts/1_historical_price.png" alt="Historical Price">
+              <img src="charts/3_gold_vs_usdinr.png" alt="Gold vs USD/INR">
+              <img src="charts/7_monte_carlo.png" alt="Monte Carlo Paths">
+          </div>
+          </body>
+          </html>
+          HTML_EOF
+          
+          # Copy images to public folder
+          cp -r outputs/charts public/
+          
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+          
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+          
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
